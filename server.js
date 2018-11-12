@@ -50,7 +50,7 @@ db.select('*').from('USER_LOGIN').then(data =>{
 app.post('/signin', (req,res) => {
 	// SELECT user name from USER_LOGIN Table
 	db.select('USER_EMAIL', 'USER_PASSWORD').from('USER_LOGIN')
-		.where('USER_EMAIL', '=', req.body.email)
+		.where('USER_EMAIL', '=', req.body.user)
 		// .then is a callback function used run another stmt.
 		// .then takes to args 1. success 2. error handler
 		.then(data => { 
@@ -58,7 +58,7 @@ app.post('/signin', (req,res) => {
 			const isValid = bcrypt.compareSync(req.body.password, data[0].USER_PASSWORD);
 			console.log(data);
 			if(isValid){
-				console.log(req.body.email);
+				console.log(req.body.user);
 				db.select('*').from('USER_INFO')
 						.then(user =>{
 							console.log(user[0].USER_EMAIL);
@@ -66,7 +66,7 @@ app.post('/signin', (req,res) => {
 						})
 				// selects the correct user from USER_INFO Table
 				return db.select('*').from('USER_INFO')
-						.where({'USER_EMAIL' : req.body.email})
+						.where({'USER_EMAIL' : req.body.user})
 						.then(user =>{
 							console.log(user);
 							res.json(user);
@@ -83,7 +83,7 @@ app.post('/signin', (req,res) => {
 // use POSTMAN to check http://localhost:3000/register
 app.post('/register', (req, res) => {
 	// create a hash from password
-	const hash = bcrypt.hashSync(req.body.password);
+	const hash = bcrypt.hashSync(req.body.registerPassword);
 	// creates the database connection. 
 	// All queries within a transaction are executed on the same database connection, and run the entire set of queries as a single unit of work
 	// Any failure will mean the database will rollback any queries executed on that connection to the pre-transaction state.
@@ -91,7 +91,7 @@ app.post('/register', (req, res) => {
 	db.transaction(trx => {
 		trx.insert({
 			USER_PASSWORD: hash,
-			USER_EMAIL: req.body.email
+			USER_EMAIL: req.body.userEmail
 		})
 		.into('USER_LOGIN')
 		//specifies which column should be returned by the insert and update methods
@@ -103,8 +103,8 @@ app.post('/register', (req, res) => {
 					.returning('*')
 					.insert({
 						USER_EMAIL: loginEmail[0],
-						USER_FNAME: req.body.fname,
-						USER_LNAME: req.body.lname,
+						USER_FNAME: "",
+						USER_LNAME: "",
 						IS_ADMIN: false
 					})
 					.then(user => {
@@ -128,7 +128,7 @@ app.get('/shoppingpage/products' , (req,res) => {
 		.from('PRODUCT_INFO')
 		.whereNot('ON_SALE', false )
 		.then(products => {
-			res.json(products);
+			res.send(products);
 		})
 		.catch(err=>res.status(400).json('list of projects cannot be displayed'))
 
@@ -275,25 +275,43 @@ app.put('/shoppingpage/updateUser/:id/:email/:fname/:lname', (req,res) => {
 //adds a new item to the database. this will be used by the admin only
 //all the items that are added by the admin will show up on the dynamic search
 app.post('/shoppingcart/admin/add', (req,res) => {
+		console.log(req.body)
 		db.insert({
-			PROD_NAME: req.body.prod_name,
-			PROD_DESC: req.body.prod_desc,
-			PROD_PRICE: req.body.prod_price,
-			ON_SALE: req.body.on_sale,
-			SALE_START_DATE: req.body.sale_start_date,
-			SALE_END_DATE: req.body.sale_end_date,
-			SALE_PRICE: req.body.sale_price,
-			IS_PROMO: req.body.is_promo,
-			PROMO_PRICE: req.body.promo_price,
-			PROMO_CODE: req.body.promo_code,
-			PROMO_START_DATE: req.body.promo_start_date,
-			PROMO_END_DATE: req.body.promo_end_date
+			PROD_NAME: req.body.prod,
+			PROD_DESC: req.body.desc,
+			PROD_PRICE: req.body.price,
+			
+			ON_SALE: req.body.sale,
+			SALE_START_DATE: req.body.saleStart,
+			SALE_END_DATE: req.body.saleEnd,
+			SALE_PRICE: req.body.salePrice,
+
+			IS_PROMO: req.body.promo,
+			PROMO_PRICE: req.body.promoPrice,
+			PROMO_CODE: req.body.promoCode,
+			PROMO_START_DATE: req.body.promoStart,
+			PROMO_END_DATE: req.body.promoEnd,
+			//PROD_QUANTITY: req.body.numAvail, //TODO: ADD
+			PROD_IMAGE: req.body.image,
+
 		})
 		.into('PRODUCT_INFO')
+		.returning('*')
 		.then(product => {
 			res.json(product);
 		})
 		.catch(err=>res.status(400).json('unable to insert a new product'))
+})
+// loads the list of products that are curently available
+// Not on sale
+app.get('/shoppingpage/admin/products/', (req,res) => {
+	db.select('*')
+		.from('PRODUCT_INFO')
+		.then(products => {
+			res.json(products);
+		})
+		.catch(err=>res.status(400).json('list of projects cannot be displayed'))
+
 })
 //removes an item from the list in the database. this will allow admin to remove
 //items that are listed on the dynemic search
@@ -308,23 +326,28 @@ app.delete('/shoppingcart/admin/remove/:id', (req,res) => {
 
 //updates the item information
 //the admin can change any item information
-app.put('/shoppingcart/admin/update/:id/:prod_name/:prod_desc/:prod_price/:on_sale/:sale_start_date/:sale_end_date/:sale_price/:is_promo/:promo_price/:promo_code/:promo_start_date/:promo_end_date', (req, res) => {
+app.post('/shoppingcart/admin/update/', (req, res) => {
 	db.update({
-			PROD_NAME: req.params.prod_name,
-			PROD_DESC: req.params.prod_desc,
-			PROD_PRICE: req.params.prod_price,
-			ON_SALE: req.params.on_sale,
-			SALE_START_DATE: req.params.sale_start_date,
-			SALE_END_DATE: req.params.sale_end_date,
-			SALE_PRICE: req.params.sale_price,
-			IS_PROMO: req.params.is_promo,
-			PROMO_PRICE: req.params.promo_price,
-			PROMO_CODE: req.params.promo_code,
-			PROMO_START_DATE: req.params.promo_start_date,
-			PROMO_END_DATE: req.params.promo_end_date
+			PROD_NAME: req.body.prod,
+			PROD_DESC: req.body.desc,
+			PROD_PRICE: req.body.price,
+			
+			ON_SALE: req.body.sale,
+			//SALE_START_DATE: req.body.saleStart,
+			//SALE_END_DATE: req.body.saleEnd,
+			SALE_PRICE: req.body.salePrice,
+
+			IS_PROMO: req.body.promo,
+			//PROMO_PRICE: req.body.promoPrice,
+			//PROMO_CODE: req.body.promoCode,
+			//PROMO_START_DATE: req.body.promoStart,
+			//PROMO_END_DATE: req.body.promoEnd,
+			//PROD_QUANTITY: req.body.numAvail, //TODO: ADD
+			//PROD_IMAGE: req.body.image,
 		})
 		.from('PRODUCT_INFO')
-		.where('PROD_ID', '=', req.params.id)
+		.where('PROD_ID', '=', req.body.id)
+		.returning('*')
 		.then(product => {
 			res.json(product);
 		})
